@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/gorilla/mux"
+	"log"
 	"net/http"
 )
 
@@ -17,7 +18,5 @@ func main() {
 	}
 	svr.routes()
 
-	if err := http.ListenAndServe(":8080", svr.router); err != nil {
-		panic(err)
-	}
+	log.Fatal(http.ListenAndServe(":8080", svr.router))
 }
