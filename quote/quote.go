@@ -14,7 +14,7 @@ import (
 type Quote struct {
 	Text   string `json:"quoteText"`
 	Author string `json:"quoteAuthor"`
-	Lang   string
+	Lang   string `json:"lang"`
 }
 
 // HTTPWrapper ...

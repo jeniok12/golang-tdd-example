@@ -188,6 +188,7 @@ PASS
 On this step we will implement request validation and the actual request to http://forismatic.com/en/api/ in order to get the quote.
 
 We will start by implementing the `quote` package. Create the Quote model.
+
 ```golang
 // quote/quote.go
 
@@ -196,10 +197,12 @@ package quote
 type Quote struct {
   Text   string `json:"quoteText"`
   Author string `json:"quoteAuthor"`
-  Lang   string
+  Lang   string `json:"lang"`
 }
 ```
-Quotes generator interface that will be added to server as a dependency
+
+Quotes generator interface that will be added to server as a dependency.
+
 ```golang
 // main.go
 ...
@@ -213,7 +216,9 @@ type server struct {
 }
 ...
 ```
-Now we want to inject server dependancies to the handlers. For that we will wrap the `HandlerFunc` inside `Handler`, and move it to different file. 
+
+Now we want to inject server dependancies to the handlers. For that we will wrap the `HandlerFunc` inside `Handler`, and move it to different file.
+
 ```golang
 //handlers.go
 
@@ -238,9 +243,11 @@ func (s *server) routes() {
   s.router.HandleFunc("/quote", s.handleQuotes())
 }
 ```
+
 Now we write a test for `handleQuotes`. This test mocks `QuoteGenerator` and test the service if the Quote was generated successfuly and not.
 
 Define a mock for 'QuoteGenerator' using `github.com/stretchr/testify/mock`:
+
 ```golang
 // handlers_test.go
 
@@ -264,7 +271,9 @@ func (m *MockQuoteGenerator) Generate(lang string) (*quote.Quote, error) {
 }
 // ...
 ```
+
 Then write test using this mock
+
 ```golang
 // handlers_test.go
 
@@ -305,7 +314,9 @@ func TestHandleQuotes(t *testing.T) {
   mockQuoteGenerator.AssertExpectations(t)
 }
 ```
+
 We make this mock return zeroed struct of `Quote`. And we are able to assert if the method has been called with expected params. If we run the test we see.
+
 ```console
 > go test -v .
 === RUN   TestHandleQuotes
@@ -316,7 +327,9 @@ We make this mock return zeroed struct of `Quote`. And we are able to assert if 
                 The code you are testing needs to make 1 more call(s).
                 at: [handlers_test.go:40]
 ```
+
 As expected the test failing because we don't call `QuoteGenerator.Generate` in our code. Let's fix it.
+
 ```golang
 // handlers.go
 
@@ -347,7 +360,9 @@ func (s *server) handleQuotes() http.HandlerFunc {
   }
 }
 ```
+
 Let's run the tests again:
+
 ```console
 > go test -v .
 === RUN   TestHandleQuotes
@@ -358,9 +373,11 @@ Let's run the tests again:
 panic: runtime error: invalid memory address or nil pointer dereference [recovered]
 ...
 ```
+
 Now our test passes but our e2e test is failing because we didn't implemented the actual `QuoteGenerator`. We deal with it in a minute, but first of all let's test `quoteHandler` for negative flow.
 
 We add another test.
+
 ```golang
 //handlers_test.go
 
@@ -384,7 +401,9 @@ func TestHandleQuotes_QuoteGeneratorError(t *testing.T) {
   mockQuoteGenerator.AssertExpectations(t)
 }
 ```
+
 This is passes too, but seem that we have code duplication that we want to prevent.
+
 ```console
 > go test -v .
 === RUN   TestHandleQuotes
@@ -398,7 +417,9 @@ This is passes too, but seem that we have code duplication that we want to preve
 panic: runtime error: invalid memory address or nil pointer dereference [recovered]
 ...
 ```
+
 We can use testCases table with Subtests.
+
 ```golang
 // handlers_test.go
 
@@ -454,7 +475,9 @@ func TestHandleQuotes(t *testing.T) {
   }
 }
 ```
+
 Let's run the tests again:
+
 ```console
 > go test -v .
 === RUN   TestHandleQuotes
@@ -469,7 +492,9 @@ Let's run the tests again:
 --- FAIL: TestQuoteAPI (0.00s)
 panic: runtime error: invalid memory address or nil pointer dereference [recovered]
 ```
+
 Now let's go back to our failing e2e test and implement the `QuoteGenereator`. We add the implementation to `quote.go` file
+
 ```golang
 // quote/quote.go
 
@@ -492,9 +517,11 @@ func (f *Forismatic) Generate(lang string) (*Quote, error) {
   return nil, errors.New("Not implemented")
 }
 ```
+
 I prefer to call it as the name of the service it uses. The 'Forismatic' struct holds the `HTTPWrapper` interface of `http.Client` so we will be able to mock it in tests.
 
 Now we inject the actual implementation to our `server`.
+
 ```golang
 // main.go
 
@@ -520,6 +547,7 @@ func main() {
   // ...
 }
 ```
+
 ```golang
 // main_test.go
 // ...
@@ -542,7 +570,9 @@ func TestQuoteAPI(t *testing.T) {
 }
 // ...
 ```
+
 Now let's run the tests
+
 ```concole
 > go test -v .
 === RUN   TestHandleQuotes
@@ -564,7 +594,9 @@ Now let's run the tests
                 Messages:       Response HTTP status in different than expected
 FAIL
 ```
+
 We still see, the test fail. But it is not `panic: runtime error: invalid memory address` any more. Our service returns 500 beause `Forismatic.Generate` returns not implemented error. Let's implement this method, starting with the test.
+
 ```golang
 // quote/quote_test.go
 
@@ -580,13 +612,13 @@ import (
 
 var mockForismaticServiceResponse = map[string]interface{}{
   "quoteText":   "Bla Bla Bla",
-  "quoteAuthor": "Moshe",
+  "quoteAuthor": "Bob",
 }
 
-var expectedQuote = Quote{
-  Author: "Moshe",
-  Text:   "Bla Bla Bla",
-  Lang:   "en",
+var expectedQuote = map[string]interface{}{
+  "quoteAuthor": "Bob",
+  "quoteText":   "Bla Bla Bla",
+  "lang":        "en",
 }
 
 func TestForismatic_Generate(t *testing.T) {
@@ -594,8 +626,8 @@ func TestForismatic_Generate(t *testing.T) {
     name               string
     lang               string
     createMocks        func() *httptest.Server
-    expectedQuote      *Quote
-    expectedToGetError bool
+    expectedStatus  int
+		expectedBody    map[string]interface{}
   }{
     {
       "SuccessResponseFromHTTPWrapper",
@@ -638,7 +670,9 @@ func TestForismatic_Generate(t *testing.T) {
   }
 }
 ```
+
 We already know how to use testCases table so I used it from the start. The new thing here is that this logic depends on `http.Client`. Good news that we don't need to mock it using `testify/mock`. Instead we use `httptest.Server`. This mock server gives us the ability to assert on the external requests and mock the responses. We run the test and see...
+
 ```concole
 > go test -v ./...
 ...
@@ -649,7 +683,7 @@ We already know how to use testCases table so I used it from the start. The new 
         quote_test.go:63: 
                 Error Trace:    quote_test.go:63
                 Error:          Not equal: 
-                                expected: &quote.Quote{Text:"Bla Bla Bla", Author:"Moshe", Lang:"en"}
+                                expected: &quote.Quote{Text:"Bla Bla Bla", Author:"Bob", Lang:"en"}
                                 actual  : (*quote.Quote)(nil)
                             
                                 Diff:
@@ -658,7 +692,7 @@ We already know how to use testCases table so I used it from the start. The new 
                                 @@ -1,6 +1,2 @@
                                 -(*quote.Quote)({
                                 - Text: (string) (len=11) "Bla Bla Bla",
-                                - Author: (string) (len=5) "Moshe",
+                                - Author: (string) (len=5) "Bob",
                                 - Lang: (string) (len=2) "en"
                                 -})
                                 +(*quote.Quote)(<nil>)
@@ -672,7 +706,9 @@ We already know how to use testCases table so I used it from the start. The new 
                 Messages:       Error is not nil
 FAIL
 ```
+
 Failed as expected, lets implement the `Generate` function
+
 ```golang
 // quote/quote.go
 
@@ -712,7 +748,9 @@ func (f *Forismatic) Generate(lang string) (*Quote, error) {
   return &quote, nil
 }
 ```
+
 We run the tests and see...
+
 ```console
 go test -v ./...
 === RUN   TestHandleQuotes
@@ -732,7 +770,9 @@ PASS
     --- PASS: TestForismatic_Generate/SuccessResponseFromHTTPWrapper (0.00s)
 PASS
 ```
+
 Let's add test for the negative flow
+
 ```golang
 // quote/quote_test.go
 // ...
@@ -751,7 +791,9 @@ Let's add test for the negative flow
 },
 // ...
 ```
+
 All tests are passes, but there one small thing left to fix. Now our e2e service uses the actual `http.Client` to call to `forismatic` service. This is problematic, because we are not in control of how many times our test going to run (in benchmarks). This may create unnesasry load on external service. The good news is that we already know how to do it. Let's use `httptest.Server` again.
+
 ```golang
 // main_test.go
 
@@ -761,13 +803,13 @@ package main
 
 var mockForismaticServiceResponse = map[string]interface{}{
   "quoteText":   "Bla Bla Bla",
-  "quoteAuthor": "Moshe",
+  "quoteAuthor": "Bob",
 }
 
-var expectedQuote = quote.Quote{
-  Author: "Moshe",
-  Text:   "Bla Bla Bla",
-  Lang:   "en",
+var expectedQuote = map[string]interface{}{
+  "quoteAuthor": "Bob",
+  "quoteText":   "Bla Bla Bla",
+  "lang":        "en",
 }
 
 func TestQuoteAPI(t *testing.T) {
@@ -776,7 +818,7 @@ func TestQuoteAPI(t *testing.T) {
     lang            string
     mockHTTPService func() *httptest.Server
     expectedStatus  int
-    expectedBody    *quote.Quote
+    expectedBody    map[string]interface{}
   }{
     {
       "SuccessResponseFromForismaticService",
@@ -797,7 +839,7 @@ func TestQuoteAPI(t *testing.T) {
         return server
       },
       http.StatusOK,
-      &expectedQuote,
+      expectedQuote,
     },
   }
   for _, tC := range testCases {
@@ -818,16 +860,16 @@ func TestQuoteAPI(t *testing.T) {
       req.URL.RawQuery = fmt.Sprintf("lang=%s", tC.lang)
       response := makeHTTPCall(svr.router, req)
 
-      qBytes, _ := ioutil.ReadAll(response.Body)
+      respBytes, _ := ioutil.ReadAll(response.Body)
 
-      var q quote.Quote
-      _ = json.Unmarshal(qBytes, &q)
+      var respMap map[string]interface{}
+      _ = json.Unmarshal(respBytes, &respMap)
 
       assert.Equal(t, tC.expectedStatus, response.Code, "Response HTTP status in different than expected")
-      assert.Equal(t, tC.expectedBody, &q, "Response HTTP body in different than expected")
+      assert.Equal(t, tC.expectedBody, respMap, "Response HTTP body in different than expected")
     })
   }
 }
 // ...
 ```
-Now if we run the tests again, the will pass as before, but now there is no call to the external service.
+Now if we run the tests again, the will pass as before, but now there is no call to the external service. Another thing it worth mentioning is that we used `map[string]interface{}` as the service response instead of the real struct (`quote.Quote`). I prefer this way because it is may indicate when we breake intreface with our users. In such case the test will fail.

@@ -12,11 +12,11 @@ import (
 
 var mockForismaticServiceResponse = map[string]interface{}{
 	"quoteText":   "Bla Bla Bla",
-	"quoteAuthor": "Moshe",
+	"quoteAuthor": "Bob",
 }
 
 var expectedQuote = Quote{
-	Author: "Moshe",
+	Author: "Bob",
 	Text:   "Bla Bla Bla",
 	Lang:   "en",
 }

@@ -16,13 +16,13 @@ import (
 
 var mockForismaticServiceResponse = map[string]interface{}{
 	"quoteText":   "Bla Bla Bla",
-	"quoteAuthor": "Moshe",
+	"quoteAuthor": "Bob",
 }
 
-var expectedQuote = quote.Quote{
-	Author: "Moshe",
-	Text:   "Bla Bla Bla",
-	Lang:   "en",
+var expectedQuote = map[string]interface{}{
+	"quoteAuthor": "Bob",
+	"quoteText":   "Bla Bla Bla",
+	"lang":        "en",
 }
 
 func TestQuoteAPI(t *testing.T) {
@@ -31,7 +31,7 @@ func TestQuoteAPI(t *testing.T) {
 		lang            string
 		mockHTTPService func() *httptest.Server
 		expectedStatus  int
-		expectedBody    *quote.Quote
+		expectedBody    map[string]interface{}
 	}{
 		{
 			"SuccessResponseFromForismaticService",
@@ -52,7 +52,7 @@ func TestQuoteAPI(t *testing.T) {
 				return server
 			},
 			http.StatusOK,
-			&expectedQuote,
+			expectedQuote,
 		},
 	}
 	for _, tC := range testCases {
@@ -73,13 +73,13 @@ func TestQuoteAPI(t *testing.T) {
 			req.URL.RawQuery = fmt.Sprintf("lang=%s", tC.lang)
 			response := makeHTTPCall(svr.router, req)
 
-			qBytes, _ := ioutil.ReadAll(response.Body)
+			respBytes, _ := ioutil.ReadAll(response.Body)
 
-			var q quote.Quote
-			_ = json.Unmarshal(qBytes, &q)
+			var respMap map[string]interface{}
+			_ = json.Unmarshal(respBytes, &respMap)
 
 			assert.Equal(t, tC.expectedStatus, response.Code, "Response HTTP status in different than expected")
-			assert.Equal(t, tC.expectedBody, &q, "Response HTTP body in different than expected")
+			assert.Equal(t, tC.expectedBody, respMap, "Response HTTP body in different than expected")
 		})
 	}
 }
