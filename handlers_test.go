@@ -4,6 +4,7 @@ package main
 
 import (
 	"./quote"
+	"./recipient"
 	"errors"
 	"fmt"
 	"github.com/stretchr/testify/assert"
@@ -23,30 +24,61 @@ func (m *MockQuoteGenerator) Generate(lang string) (*quote.Quote, error) {
 	return quote, args.Error(1)
 }
 
+type MockRecipientsFetcher struct {
+	mock.Mock
+}
+
+func (m *MockRecipientsFetcher) AllRecipients() ([]recipient.Recipient, error) {
+	args := m.Called()
+	r, _ := args.Get(0).([]recipient.Recipient)
+	return r, args.Error(1)
+}
+
 func TestHandleQuotes(t *testing.T) {
 	testCases := []struct {
 		name           string
 		lang           string
-		createMocks    func() *MockQuoteGenerator
+		createMocks    func() (*MockQuoteGenerator, *MockRecipientsFetcher)
 		expectedStatus int
 	}{
 		{
 			"QuoteGenerator_Success",
 			"en",
-			func() *MockQuoteGenerator {
+			func() (*MockQuoteGenerator, *MockRecipientsFetcher) {
 				mockQuoteGenerator := MockQuoteGenerator{}
 				mockQuoteGenerator.On("Generate", "en").Return(&quote.Quote{}, nil)
-				return &mockQuoteGenerator
+
+				mockRecipientsFetcher := MockRecipientsFetcher{}
+				mockRecipientsFetcher.On("AllRecipients").Return([]recipient.Recipient{}, nil)
+
+				return &mockQuoteGenerator, &mockRecipientsFetcher
 			},
 			http.StatusOK,
 		},
 		{
 			"QuoteGenerator_Fail",
 			"en",
-			func() *MockQuoteGenerator {
+			func() (*MockQuoteGenerator, *MockRecipientsFetcher) {
 				mockQuoteGenerator := MockQuoteGenerator{}
 				mockQuoteGenerator.On("Generate", "en").Return(nil, errors.New("sample error"))
-				return &mockQuoteGenerator
+
+				mockRecipientsFetcher := MockRecipientsFetcher{}
+
+				return &mockQuoteGenerator, &mockRecipientsFetcher
+			},
+			http.StatusInternalServerError,
+		},
+		{
+			"RecipientsFetcher_Fail",
+			"en",
+			func() (*MockQuoteGenerator, *MockRecipientsFetcher) {
+				mockQuoteGenerator := MockQuoteGenerator{}
+				mockQuoteGenerator.On("Generate", "en").Return(&quote.Quote{}, nil)
+
+				mockRecipientsFetcher := MockRecipientsFetcher{}
+				mockRecipientsFetcher.On("AllRecipients").Return(nil, errors.New("sample error"))
+
+				return &mockQuoteGenerator, &mockRecipientsFetcher
 			},
 			http.StatusInternalServerError,
 		},
@@ -54,9 +86,10 @@ func TestHandleQuotes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			mockQuoteGenerator := tc.createMocks()
+			mockQuoteGenerator, mockRecipientsFetcher := tc.createMocks()
 			svr := server{
-				quoteGenerator: mockQuoteGenerator,
+				quoteGenerator:    mockQuoteGenerator,
+				recipientsFetcher: mockRecipientsFetcher,
 			}
 
 			rr := httptest.NewRecorder()
@@ -67,6 +100,7 @@ func TestHandleQuotes(t *testing.T) {
 
 			assert.Equal(t, tc.expectedStatus, rr.Code, "Response HTTP status in different than expected")
 			mockQuoteGenerator.AssertExpectations(t)
+			mockRecipientsFetcher.AssertExpectations(t)
 		})
 	}
 }

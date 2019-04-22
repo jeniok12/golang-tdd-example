@@ -4,6 +4,7 @@ package recipient
 
 import (
 	"database/sql"
+	"fmt"
 )
 
 // Recipient ...
@@ -16,6 +17,18 @@ type Recipient struct {
 // Persistence ...
 type Persistence struct {
 	DB *sql.DB
+}
+
+// NewPersistence ...
+func NewPersistence(host, dbName string) (*Persistence, error) {
+	db, err := sql.Open("postgres", fmt.Sprintf("dbname=%s host=%s sslmode=disable", dbName, host))
+	if err != nil {
+		return nil, err
+	}
+
+	return &Persistence{
+		DB: db,
+	}, nil
 }
 
 // AllRecipients ...

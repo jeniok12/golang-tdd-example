@@ -11,8 +11,8 @@ import (
 
 // HandleQuoteResponse ..
 type HandleQuoteResponse struct {
-	Quote      *quote.Quote
-	Recipients []recipient.Recipient
+	Quote      *quote.Quote          `json:"quote"`
+	Recipients []recipient.Recipient `json:"recipients"`
 }
 
 func (s *server) handleQuotes() http.HandlerFunc {
@@ -25,8 +25,15 @@ func (s *server) handleQuotes() http.HandlerFunc {
 			return
 		}
 
+		recipients, err := s.recipientsFetcher.AllRecipients()
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+
 		hqr := HandleQuoteResponse{
-			Quote: quote,
+			Quote:      quote,
+			Recipients: recipients,
 		}
 
 		resp, err := json.Marshal(hqr)

@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-var testDB *sql.DB
+var testPersistence *Persistence
 var expectedRecipients = []Recipient{
 	{
 		ID:    1,
@@ -32,7 +32,7 @@ var expectedRecipients = []Recipient{
 
 func TestMain(m *testing.M) {
 	var err error
-	testDB, err = sql.Open("postgres", "dbname=quotes_test host=localhost sslmode=disable")
+	testPersistence, err = NewPersistence("localhost", "quotes_test")
 	if err != nil {
 		panic(err)
 	}
@@ -79,17 +79,13 @@ func TestAllRecipients(t *testing.T) {
 	}
 	for _, tC := range testCases {
 		t.Run(tC.name, func(t *testing.T) {
-			err := clearDB(testDB)
-			require.NoErrorf(t, err, "Should have not error when cleaning the DB")
+			err := clearDB(testPersistence.DB)
+			require.NoErrorf(t, err, "Should have no error when cleaning the DB")
 
-			err = tC.presetDB(testDB)
-			require.NoErrorf(t, err, "Should have not error when presetting the DB")
+			err = tC.presetDB(testPersistence.DB)
+			require.NoErrorf(t, err, "Should have no error when pre-setting the DB")
 
-			p := Persistence{
-				DB: testDB,
-			}
-
-			recipients, err := p.AllRecipients()
+			recipients, err := testPersistence.AllRecipients()
 
 			assert.Equal(t, err, tC.err, "Error should be as expected")
 			assert.ElementsMatch(t, recipients, tC.expectedRecipients, "Response should be as expected")

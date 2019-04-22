@@ -54,7 +54,7 @@ And then send an HTTP request and see.
 ```
 
 Now we are ready to write our first test. We want to test the service e2e, but without running it. We will send a sample HTTP request and then run asserts on the HTTP response and on other side effects caused by this call (DB updates, calls to other services and so).In order to do that we need:
-1. Make router accessible for tests.
+1. Make the router accessible for tests.
 1. Use `httptest.ResponseRecorder` in order to assert service response.
 
 Let's create a `server` struct that will hold all service dependencies. As for now, it will hold only the router.
@@ -203,7 +203,7 @@ type Quote struct {
 }
 ```
 
-Quotes generator interface that will be added to server as a dependency.
+Quotes generator interface that will be added to the server as a dependency.
 
 ```golang
 // main.go
@@ -245,7 +245,7 @@ func (s *server) routes() {
 }
 ```
 
-Now we write a test for `handleQuotes`. This test mocks `QuoteGenerator` and test the service if the Quote was generated successfuly and not.
+Now we write a test for `handleQuotes`. This test mocks `QuoteGenerator` and test the service if the Quote was generated successfully and not.
 
 Define a mock for 'QuoteGenerator' using `github.com/stretchr/testify/mock`:
 
@@ -399,7 +399,7 @@ func TestHandleQuotes_QuoteGeneratorError(t *testing.T) {
 }
 ```
 
-This is passes too, but seem that we have code duplication that we want to prevent.
+This is passing too, but seem that we have code duplication that we want to prevent.
 
 ```console
 > go test -v .
@@ -590,7 +590,7 @@ Now let's run the tests
 FAIL
 ```
 
-We still see, the test fail. But it is not `panic: runtime error: invalid memory address` any more. Our service returns 500 beause `Forismatic.Generate` returns not implemented error. Let's implement this method, starting with the test.
+We still see the test fail. But it is not `panic: runtime error: invalid memory address` anymore. Our service returns 500 because `Forismatic.Generate` returns not implemented error. Let's implement this method, starting with the test.
 
 ```golang
 // quote/quote_test.go
@@ -621,7 +621,7 @@ func TestForismatic_Generate(t *testing.T) {
     lang               string
     createMocks        func() *httptest.Server
     expectedStatus  int
-		expectedBody    map[string]interface{}
+        expectedBody    map[string]interface{}
   }{
     {
       "SuccessResponseFromHTTPWrapper",
@@ -701,7 +701,7 @@ We already know how to use `testCases` table so I used it from the start. The ne
 FAIL
 ```
 
-Failed as expected, lets implement the `Generate` function
+Failed as expected, let's implement the `Generate` function
 
 ```golang
 // quote/quote.go
@@ -865,12 +865,12 @@ func TestQuoteAPI(t *testing.T) {
 // ...
 ```
 
-Now if we run the tests again, the will pass as before, but now there is no call to the external service. Another thing it worth mentioning is that we used `map[string]interface{}` as the service response instead of the real struct (`quote.Quote`). I prefer this way because it is may indicate when we breake intreface with our users. In such case the test will fail.
+Now if we run the tests again, the will pass as before, but now there is no call to the external service. Another thing that is worth mentioning is that we used `map[string]interface{}` as the service response instead of the real struct (`quote.Quote`). I prefer this way because it is may indicate when we break interface with our users. In such case, the test will fail.
 
 
 ## Step 3 - Working with DB
 
-I assume that you aleady have Postgres DB installed on your machine (if not please refer to www.postgresql.org). Now we create two DB, the real one and one that will be used for tests.
+I assume that you already have Postgres DB installed on your machine (if not please refer to www.postgresql.org). Now we create two DB, the real one and one that will be used for tests.
 
 ```console
 > createdb quotes
@@ -887,10 +887,10 @@ Now we add some migrations files to create the recipient table.
 -- migrations\..._create_recipient_table.up.sql
 CREATE TABLE recipients
 (
-    id SERIAL,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL,
-    CONSTRAINT recipients_pkey PRIMARY KEY (id)
+  id SERIAL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  CONSTRAINT recipients_pkey PRIMARY KEY (id)
 );
 ```
 
@@ -922,6 +922,18 @@ type Persistence struct {
   DB *sql.DB
 }
 
+// NewPersistence ...
+func NewPersistence(host, dbName string) (*Persistence, error) {
+  db, err := sql.Open("postgres", fmt.Sprintf("dbname=%s host=%s sslmode=disable", dbName, host))
+  if err != nil {
+      return nil, err
+  }
+
+  return &Persistence{
+      DB: db,
+  }, nil
+}
+
 // AllRecipients ...
 func (p *Persistence) AllRecipients() ([]Recipient, error) {
   var recipients []Recipient
@@ -946,7 +958,7 @@ import (
   "testing"
 )
 
-var testDB *sql.DB
+var testPersistence *Persistence
 var expectedRecipients = []Recipient{
   {
     ID:    1,
@@ -967,7 +979,7 @@ var expectedRecipients = []Recipient{
 
 func TestMain(m *testing.M) {
   var err error
-  testDB, err = sql.Open("postgres", "dbname=quotes_test host=localhost sslmode=disable")
+  testPersistence, err = NewPersistence("localhost", "quotes_test")
   if err != nil {
     panic(err)
   }
@@ -1006,17 +1018,13 @@ func TestAllRecipients(t *testing.T) {
   }
   for _, tC := range testCases {
     t.Run(tC.name, func(t *testing.T) {
-      err := clearDB(testDB)
+      err := clearDB(testPersistence.DB)
       require.NoErrorf(t, err, "Should have not error when cleaning the DB")
 
-      err = tC.presetDB(testDB)
+      err = tC.presetDB(testPersistence.DB)
       require.NoErrorf(t, err, "Should have not error when presetting the DB")
 
-      p := Persistence{
-        DB: testDB,
-      }
-
-      recipients, err := p.AllRecipients()
+      recipients, err := testPersistence.AllRecipients()
 
       assert.Equal(t, err, tC.err, "Error should be as expected")
       assert.ElementsMatch(t, recipients, tC.expectedRecipients, "Response should be as expected")
@@ -1031,10 +1039,10 @@ func clearDB(db *sql.DB) error {
 ```
 
 This test file needs a bit of explanation.
-1. I use `quotes_test` DB for tests. In order to be able freely truncate all the tables before each test and run clean.
-2. The use of `*testing.M`: TestMain gives us more control on how the test of this package are running.  Here we use it to run a setup. It runs once before all of the tests in this package.
-2. We test `recipient.Persistence` without mocking its dependency (DB). Unfortunatly, we don't use an ORM here, and even if we did, it is difficult not to use custom sql scripts that are passed as string to different DB methods. This sql scripts is not compiled, means that error are avaliable only in run time. Our tests provide such a runtime.
-3. Use `require` package after a cleanup and setup. `require` (in contrast to `assert`) packege stops the test run if the condition wasn't met. Here it makes sence, if I wasn't able to setup or clean last run data, there is not point to run following tests.
+1. I use `quotes_test` DB for tests. In order to be able to freely truncate all the tables before each test and run clean.
+2. The use of `*testing.M`: TestMain gives us more control over how the tests of this package are running.  Here we use it to run a setup. It runs once before all of the tests in this package.
+2. We test `recipient.Persistence` without mocking its dependency (DB). Unfortunately, we don't use an ORM here, and even if we did, it is difficult not to use custom SQL scripts that are passed as a string to different DB methods. This SQL script is not compiled, means that errors are available only in run time. Our tests provide such a runtime.
+3. Use `require` package after a cleanup and setup. `require` (in contrast to `assert`) package stops the test run if the condition wasn't met. Here it makes sense, if I wasn't able to set up or clean last run data, there is no point to run the following tests.
 
 Let's run the tests:
 ```console
@@ -1133,7 +1141,7 @@ We run the tests again ...
 PASS
 ```
 
-Now let's app e2e test for that. I want add the recipients list to the `/quotes` API response. We expand the API response as follows.
+Now let's app e2e test for that. I want to add the recipients' list to the `/quotes` API response. We expand the API response as follows.
 
 ```golang
 // handlers.go
@@ -1143,8 +1151,8 @@ package main
 
 // HandleQuoteResponse ..
 type HandleQuoteResponse struct {
-	Quote      *quote.Quote
-	Recipients []recipient.Recipient
+  Quote      *quote.Quote          `json:"quote"`
+  Recipients []recipient.Recipient `json:"recipients"`
 }
 
 func (s *server) handleQuotes() http.HandlerFunc {
@@ -1163,4 +1171,472 @@ func (s *server) handleQuotes() http.HandlerFunc {
 
 ```
 
+We run the tests and see that the e2e test failed
 
+```console
+> go test -v ./...
+=== RUN   TestQuoteAPI
+=== RUN   TestQuoteAPI/SuccessResponseFromForismaticService
+--- FAIL: TestQuoteAPI (0.00s)
+    --- FAIL: TestQuoteAPI/SuccessResponseFromForismaticService (0.00s)
+        main_test.go:82: 
+                Error Trace:    main_test.go:82
+                Error:          Not equal: 
+                                expected: map[string]interface {}{"lang":"en", "quoteAuthor":"Bob", "quoteText":"Bla Bla Bla"}
+                                actual  : map[string]interface {}{"quote":map[string]interface {}{"lang":"en", "quoteAuthor":"Bob", "quoteText":"Bla Bla Bla"}, "recipients":interface {}(nil)}
+
+                                ...
+
+                Test:           TestQuoteAPI/SuccessResponseFromForismaticService
+                Messages:       Response HTTP body in different than expected
+FAIL
+```
+
+We fix the test and assertion for the recipients' collection
+
+```golang
+// main_test.go
+
+// ...
+
+var srv server
+var testRecipientsPersistence *recipient.Persistence
+
+var mockForismaticServiceResponse = map[string]interface{}{
+  "quoteText":   "Bla Bla Bla",
+  "quoteAuthor": "Bob",
+}
+
+var expectedRecipients = []map[string]interface{}{
+  map[string]interface{}{
+    "id":    1,
+    "name":  "user1",
+    "email": "user1@testmail.com",
+  },
+  map[string]interface{}{
+    "id":    2,
+    "name":  "user2",
+    "email": "user2@testmail.com",
+  },
+  map[string]interface{}{
+    "id":    3,
+    "name":  "user3",
+    "email": "user3@testmail.com",
+  },
+}
+
+var expectedQuote = map[string]interface{}{
+  "quoteAuthor": "Bob",
+  "quoteText":   "Bla Bla Bla",
+  "lang":        "en",
+}
+
+func TestMain(m *testing.M) {
+
+  var err error
+  testRecipientsPersistence, err = recipient.NewPersistence("localhost", "quotes_test")
+  if err != nil {
+    panic(err)
+  }
+
+  srv = server{
+    router:            mux.NewRouter(),
+    recipientsFetcher: testRecipientsPersistence,
+  }
+  srv.routes()
+
+  code := m.Run()
+
+  os.Exit(code)
+}
+
+func TestQuoteAPI(t *testing.T) {
+  testCases := []struct {
+    name            string
+    lang            string
+    mockHTTPService func() *httptest.Server
+    presetDB        func(db *sql.DB) error
+    expectedStatus  int
+    expectedBody    map[string]interface{}
+  }{
+    {
+      "SuccessResponseFromForismaticService",
+      "en",
+      func() *httptest.Server {
+        server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+          assert.Equal(t, http.MethodGet, req.Method, "Should have different request method")
+
+          assert.Equal(t, "getQuote", req.URL.Query().Get("method"), "Wrong method query param")
+          assert.Equal(t, "json", req.URL.Query().Get("format"), "Wrong method query param")
+          assert.Equal(t, "en", req.URL.Query().Get("lang"), "Wrong method query param")
+
+          res, _ := json.Marshal(mockForismaticServiceResponse)
+          rw.WriteHeader(http.StatusOK)
+          rw.Write(res)
+        }))
+
+        return server
+      },
+      func(db *sql.DB) error {
+        query := "INSERT INTO recipients (id, name, email) VALUES ($1, $2, $3);"
+        tx, err := db.Begin()
+
+        for _, r := range expectedRecipients {
+          _, err = tx.Exec(query, r["id"], r["name"], r["email"])
+          if err != nil {
+            fmt.Println(fmt.Sprintf("Error: %+v", err))
+          }
+        }
+
+        tx.Commit()
+        return err
+      },
+      http.StatusOK,
+      map[string]interface{}{
+        "quote":      expectedQuote,
+        "recipients": expectedRecipients,
+      },
+    },
+  }
+  for _, tC := range testCases {
+    t.Run(tC.name, func(t *testing.T) {
+      s := tC.mockHTTPService()
+      defer s.Close()
+
+      srv.quoteGenerator = &quote.Forismatic{
+          URL:    s.URL,
+          Client: s.Client(),
+      }
+
+      clearDB(testRecipientsPersistence.DB)
+      tC.presetDB(testRecipientsPersistence.DB)
+
+      req, _ := http.NewRequest("GET", "/quote", nil)
+      req.URL.RawQuery = fmt.Sprintf("lang=%s", tC.lang)
+      response := makeHTTPCall(srv.router, req)
+
+      respBytes, _ := ioutil.ReadAll(response.Body)
+
+      var respMap map[string]interface{}
+      _ = json.Unmarshal(respBytes, &respMap)
+
+      assert.Equal(t, tC.expectedStatus, response.Code, "Response HTTP status in different than expected")
+      assert.Equal(t, tC.expectedBody, respMap, "Response HTTP body in different than expected")
+    })
+  }
+}
+
+// ...
+
+func clearDB(db *sql.DB) error {
+  _, err := db.Exec("TRUNCATE TABLE recipients")
+  return err
+}
+```
+
+Now the e2e test is pre-setting the DB, asserting the request to have recipients slice, but still fails because we didn't implement recipients fetch inside the handler. Let's do it, and fix handler_test as we go.
+
+```golang
+// handlers.go
+// ...
+func (s *server) handleQuotes() http.HandlerFunc {
+  return func(w http.ResponseWriter, r *http.Request) {
+    // ...
+    recipients, err := s.recipientsFetcher.AllRecipients()
+    if err != nil {
+      w.WriteHeader(http.StatusInternalServerError)
+      return
+    }
+
+    hqr := HandleQuoteResponse{
+      Quote:      quote,
+      Recipients: recipients,
+    }
+    // ...
+  }
+}
+// ...
+```
+
+```golang
+// handlers_test.go
+// ...
+import (
+  // ...
+  "./recipient"
+  // ...
+)
+
+// ...
+
+type MockRecipientsFetcher struct {
+  mock.Mock
+}
+
+func (m *MockRecipientsFetcher) AllRecipients() ([]recipient.Recipient, error) {
+  args := m.Called()
+  r, _ := args.Get(0).([]recipient.Recipient)
+  return r, args.Error(1)
+}
+
+func TestHandleQuotes(t *testing.T) {
+  testCases := []struct {
+    name           string
+    lang           string
+    createMocks    func() (*MockQuoteGenerator, *MockRecipientsFetcher)
+    expectedStatus int
+  }{
+      {
+        "QuoteGenerator_Success",
+        "en",
+        func() (*MockQuoteGenerator, *MockRecipientsFetcher) {
+          mockQuoteGenerator := MockQuoteGenerator{}
+          mockQuoteGenerator.On("Generate", "en").Return(&quote.Quote{}, nil)
+
+          mockRecipientsFetcher := MockRecipientsFetcher{}
+          mockRecipientsFetcher.On("AllRecipients").Return([]recipient.Recipient{}, nil)
+
+          return &mockQuoteGenerator, &mockRecipientsFetcher
+        },
+        http.StatusOK,
+      },
+      {
+        "QuoteGenerator_Fail",
+        "en",
+        func() (*MockQuoteGenerator, *MockRecipientsFetcher) {
+          mockQuoteGenerator := MockQuoteGenerator{}
+          mockQuoteGenerator.On("Generate", "en").Return(nil, errors.New("sample error"))
+
+          mockRecipientsFetcher := MockRecipientsFetcher{}
+
+          return &mockQuoteGenerator, &mockRecipientsFetcher
+        },
+        http.StatusInternalServerError,
+      },
+      {
+        "RecipientsFetcher_Fail",
+        "en",
+        func() (*MockQuoteGenerator, *MockRecipientsFetcher) {
+          mockQuoteGenerator := MockQuoteGenerator{}
+          mockQuoteGenerator.On("Generate", "en").Return(&quote.Quote{}, nil)
+
+          mockRecipientsFetcher := MockRecipientsFetcher{}
+          mockRecipientsFetcher.On("AllRecipients").Return(nil, errors.New("sample error"))
+
+          return &mockQuoteGenerator, &mockRecipientsFetcher
+        },
+        http.StatusInternalServerError,
+      },
+  }
+
+  for _, tc := range testCases {
+    t.Run(tc.name, func(t *testing.T) {
+      mockQuoteGenerator, mockRecipientsFetcher := tc.createMocks()
+      svr := server{
+        quoteGenerator:    mockQuoteGenerator,
+        recipientsFetcher: mockRecipientsFetcher,
+      }
+
+      rr := httptest.NewRecorder()
+      req, _ := http.NewRequest("GET", "/quote", nil)
+      req.URL.RawQuery = fmt.Sprintf("lang=%s", tc.lang)
+
+      svr.handleQuotes()(rr, req)
+
+      assert.Equal(t, tc.expectedStatus, rr.Code, "Response HTTP status in different than expected")
+      mockQuoteGenerator.AssertExpectations(t)
+      mockRecipientsFetcher.AssertExpectations(t)
+    })
+  }
+}
+```
+
+```golang
+// main_test.go
+
+import (
+  // ...
+  "./recipient"
+  // ...
+  _ "github.com/lib/pq"
+  // ...
+)
+
+var srv server
+var testRecipientsPersistence *recipient.Persistence
+
+var mockForismaticServiceResponse = map[string]interface{}{
+  "quoteText":   "Bla Bla Bla",
+  "quoteAuthor": "Bob",
+}
+
+var expectedRecipients = []interface{}{
+  map[string]interface{}{
+    "id":    1.0,
+    "name":  "user1",
+    "email": "user1@testmail.com",
+  },
+  map[string]interface{}{
+    "id":    2.0,
+    "name":  "user2",
+    "email": "user2@testmail.com",
+  },
+  map[string]interface{}{
+    "id":    3.0,
+    "name":  "user3",
+    "email": "user3@testmail.com",
+  },
+}
+
+var expectedQuote = map[string]interface{}{
+  "quoteAuthor": "Bob",
+  "quoteText":   "Bla Bla Bla",
+  "lang":        "en",
+}
+
+func TestMain(m *testing.M) {
+
+  var err error
+  testRecipientsPersistence, err = recipient.NewPersistence("localhost", "quotes_test")
+  if err != nil {
+    panic(err)
+  }
+
+  srv = server{
+    router:            mux.NewRouter(),
+    recipientsFetcher: testRecipientsPersistence,
+  }
+  srv.routes()
+
+  code := m.Run()
+
+  os.Exit(code)
+}
+
+func TestQuoteAPI(t *testing.T) {
+  testCases := []struct {
+    name            string
+    lang            string
+    mockHTTPService func() *httptest.Server
+    presetDB        func(db *sql.DB) error
+    expectedStatus  int
+    expectedBody    map[string]interface{}
+  }{
+    {
+      "SuccessResponseFromForismaticService",
+      "en",
+      func() *httptest.Server {
+        server := httptest.NewServer(http.HandlerFunc(func(rw http.ResponseWriter, req *http.Request) {
+          assert.Equal(t, http.MethodGet, req.Method, "Should have different request method")
+
+          assert.Equal(t, "getQuote", req.URL.Query().Get("method"), "Wrong method query param")
+          assert.Equal(t, "json", req.URL.Query().Get("format"), "Wrong method query param")
+          assert.Equal(t, "en", req.URL.Query().Get("lang"), "Wrong method query param")
+
+          res, _ := json.Marshal(mockForismaticServiceResponse)
+          rw.WriteHeader(http.StatusOK)
+          rw.Write(res)
+        }))
+
+        return server
+      },
+      func(db *sql.DB) error {
+        query := "INSERT INTO recipients (id, name, email) VALUES ($1, $2, $3);"
+        tx, err := db.Begin()
+
+        for _, r := range expectedRecipients {
+          rMap := r.(map[string]interface{})
+          _, err = tx.Exec(query, rMap["id"], rMap["name"], rMap["email"])
+          if err != nil {
+            fmt.Println(fmt.Sprintf("Error: %+v", err))
+          }
+        }
+
+        tx.Commit()
+        return err
+      },
+      http.StatusOK,
+      map[string]interface{}{
+          "quote":      expectedQuote,
+          "recipients": expectedRecipients,
+      },
+    },
+  }
+  for _, tC := range testCases {
+    t.Run(tC.name, func(t *testing.T) {
+      s := tC.mockHTTPService()
+      defer s.Close()
+
+      srv.quoteGenerator = &quote.Forismatic{
+        URL:    s.URL,
+        Client: s.Client(),
+      }
+
+      clearDB(testRecipientsPersistence.DB)
+      tC.presetDB(testRecipientsPersistence.DB)
+
+      req, _ := http.NewRequest("GET", "/quote", nil)
+      req.URL.RawQuery = fmt.Sprintf("lang=%s", tC.lang)
+      response := makeHTTPCall(srv.router, req)
+
+      respBytes, _ := ioutil.ReadAll(response.Body)
+
+      var respMap map[string]interface{}
+      _ = json.Unmarshal(respBytes, &respMap)
+
+      assert.Equal(t, tC.expectedStatus, response.Code, "Response HTTP status in different than expected")
+      assert.EqualValues(t, tC.expectedBody, respMap, "Response HTTP body in different than expected")
+    })
+  }
+}
+
+func makeHTTPCall(router *mux.Router, req *http.Request) *httptest.ResponseRecorder {
+  rr := httptest.NewRecorder()
+  router.ServeHTTP(rr, req)
+
+  return rr
+}
+
+func clearDB(db *sql.DB) error {
+  _, err := db.Exec("TRUNCATE TABLE recipients")
+  return err
+}
+```
+
+We run the tests and everything is green.
+
+```console
+> go test -v ./...
+=== RUN   TestHandleQuotes
+=== RUN   TestHandleQuotes/QuoteGenerator_Success
+=== RUN   TestHandleQuotes/QuoteGenerator_Fail
+=== RUN   TestHandleQuotes/RecipientsFetcher_Fail
+--- PASS: TestHandleQuotes (0.00s)
+    --- PASS: TestHandleQuotes/QuoteGenerator_Success (0.00s)
+        handlers_test.go:102: PASS:     Generate(string)
+        handlers_test.go:103: PASS:     AllRecipients()
+    --- PASS: TestHandleQuotes/QuoteGenerator_Fail (0.00s)
+        handlers_test.go:102: PASS:     Generate(string)
+    --- PASS: TestHandleQuotes/RecipientsFetcher_Fail (0.00s)
+        handlers_test.go:102: PASS:     Generate(string)
+        handlers_test.go:103: PASS:     AllRecipients()
+=== RUN   TestQuoteAPI
+=== RUN   TestQuoteAPI/SuccessResponseFromForismaticService
+--- PASS: TestQuoteAPI (0.03s)
+    --- PASS: TestQuoteAPI/SuccessResponseFromForismaticService (0.03s)
+PASS
+=== RUN   TestForismatic_Generate
+=== RUN   TestForismatic_Generate/SuccessResponseFromHTTPWrapper
+=== RUN   TestForismatic_Generate/ErrorFromHTTPWrapper
+--- PASS: TestForismatic_Generate (0.00s)
+    --- PASS: TestForismatic_Generate/SuccessResponseFromHTTPWrapper (0.00s)
+    --- PASS: TestForismatic_Generate/ErrorFromHTTPWrapper (0.00s)
+PASS
+=== RUN   TestAllRecipients
+=== RUN   TestAllRecipients/RecipientsFound
+=== RUN   TestAllRecipients/RecipientsNotFound
+--- PASS: TestAllRecipients (0.07s)
+    --- PASS: TestAllRecipients/RecipientsFound (0.06s)
+    --- PASS: TestAllRecipients/RecipientsNotFound (0.00s)
+PASS
+```

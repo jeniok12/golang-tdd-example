@@ -4,6 +4,7 @@ package main
 
 import (
 	"./quote"
+	"./recipient"
 	"github.com/gorilla/mux"
 	"log"
 	"net/http"
@@ -15,9 +16,15 @@ type QuoteGenerator interface {
 	Generate(lang string) (*quote.Quote, error)
 }
 
+// RecipientFetcher ...
+type RecipientFetcher interface {
+	AllRecipients() ([]recipient.Recipient, error)
+}
+
 type server struct {
-	router         *mux.Router
-	quoteGenerator QuoteGenerator
+	router            *mux.Router
+	quoteGenerator    QuoteGenerator
+	recipientsFetcher RecipientFetcher
 }
 
 func main() {
