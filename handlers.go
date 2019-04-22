@@ -3,9 +3,17 @@
 package main
 
 import (
+	"./quote"
+	"./recipient"
 	"encoding/json"
 	"net/http"
 )
+
+// HandleQuoteResponse ..
+type HandleQuoteResponse struct {
+	Quote      *quote.Quote
+	Recipients []recipient.Recipient
+}
 
 func (s *server) handleQuotes() http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -17,7 +25,11 @@ func (s *server) handleQuotes() http.HandlerFunc {
 			return
 		}
 
-		resp, err := json.Marshal(quote)
+		hqr := HandleQuoteResponse{
+			Quote: quote,
+		}
+
+		resp, err := json.Marshal(hqr)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
