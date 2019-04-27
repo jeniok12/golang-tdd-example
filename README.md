@@ -1,14 +1,23 @@
-# Step by step guide of building HTTP service using Golang and TDD
+# Step by step guide for building HTTP service using Golang and TDD
 
 ## Intro
 
-In the following guide, I will present how to build an HTTP service using `go1.12.4`, `gorilla/mux` for URL routing, `stretchr/testify` for mocks and assertions and `lib/pq` for Postgres. This is my stack, feel free to use different packages it shouldn't affect much of the following. Also, I will try to follow TDD approach as much as possible. All of the source code is available on GitHub.
+In the following guide, I will present how to build an HTTP service in Golang. I will try to follow TDD approach as much as possible.
+
+I will use the following technologies:
+1. `go1.12.4`
+1. `gorilla/mux` for URL routing
+1. `lib/pq` for Postgres
+1. `stretchr/testify` for mocks and verification of assertions
+
+This is my stack, feel free to use different packages, it shouldn't affect much the following.  All of the source code is available on GitHub.
 
 ```console
 git clone https://github.com/jeniok12/golang-tdd-example.git
 ```
 
 ## Instalations
+
 ```cosnole
 go get -u github.com/gorilla/mux
 go get github.com/stretchr/testify
@@ -18,7 +27,7 @@ go get -tags 'postgres' -u github.com/golang-migrate/migrate/cmd/migrate
 
 ## Step 0 - What should we build?
 
-I decided to create an InspiringQuotes service, which I will use from time to time in order to increase my teammate's morale. This service will generate an inspiring quote using [forismatic.com](http://forismatic.com/en/api/) service and send it to list of my teammates (stored in Postgres DB) via Email. In the end, my colleagues will have an example of how to write a testable Golang service in addition to high morale to use it :)
+I have decided to create an InspiringQuotes service, which I will use from time to time in order to increase my teammate's morale. This service will generate an inspiring quote using [forismatic.com](http://forismatic.com/en/api/) service and send it to my teammates (stored in Postgres DB) via Email. In the end, my colleagues will have an example of how to write a testable Golang service and in the same time will encourage them to use this approach :)
 
 ## Step 1 - New Service is born
 
@@ -46,16 +55,18 @@ Let's run our server using:
 > go run .
 ```
 
-And then send an HTTP request and see.
+And then send an HTTP request and see the result.
 
 ```console
 > curl http://localhost:8080
 404 page not found
 ```
 
-Now we are ready to write our first test. We want to test the service e2e, but without running it. We will send a sample HTTP request and then run asserts on the HTTP response and on other side effects caused by this call (DB updates, calls to other services and so).In order to do that we need:
+Now we are ready to write our first test. We want to test the service E2E, but without running it.
+
+First we will send a sample HTTP request and then validete our assertions about the HTTP response and on other side-effects caused by this call (DB updates, calls to other services etc). In order to do that we need to:
 1. Make the router accessible for tests.
-1. Use `httptest.ResponseRecorder` in order to assert service response.
+1. Use `httptest.ResponseRecorder` in order to validate assertions about service response.
 
 Let's create a `server` struct that will hold all service dependencies. As for now, it will hold only the router.
 
@@ -65,7 +76,7 @@ type server struct {
 }
 ```
 
-Next, initialize it in `main` function. So, `main.go` will look:
+Next, initialize it in `main` function. Then `main.go` will look like this:
 
 ```golang
 // main.go
@@ -101,7 +112,7 @@ func (s *server) routes() {
 }
 ```
 
-Now let's write an E2E test. We use `httptest.ResponseRecorder` as  `http.ResponseWriter` in our calls to the router. `httptest.ResponseRecorder` will store the HTTP response, so we will be able to assert it with the expected result.
+Now let's write an E2E test. We use `httptest.ResponseRecorder` as `http.ResponseWriter` in our calls to the router. `httptest.ResponseRecorder` will store the HTTP response, so we will be able to verify our assertions about the expected result.
 
 ```golang
 // main_test.go
@@ -141,7 +152,7 @@ Run the test by executing:
 > go test -v ./...
 ```
 
-And the result is...
+And the result is:
 
 ```console
 === RUN   TestQuoteAPI
@@ -158,7 +169,7 @@ FAIL
 
 Failed as expected.
 
-Now is the time to make this test pass. We Implementing the required route.
+Now it is time to make this test pass. We Implementing the required route:
 
 ```golang
 // routes.go
@@ -188,9 +199,9 @@ PASS
 
 ## Step 2 - Call to another service
 
-On this step, we will implement request validation and the actual request to http://forismatic.com/en/api/ in order to get the quote.
+In this step, we will implement the actual request to http://forismatic.com/en/api/ in order to get the quote.
 
-We will start by implementing the `quote` package. Create a Quote model.
+We will start by implementing the `quote` package. Let's Create a Quote model:
 
 ```golang
 // quote/quote.go
@@ -203,7 +214,7 @@ type Quote struct {
 }
 ```
 
-Quotes generator interface that will be added to the server as a dependency.
+Add QuotesGenerator interface that will be added to the server as a dependency.
 
 ```golang
 // main.go
@@ -219,7 +230,7 @@ type server struct {
 ...
 ```
 
-Now we want to inject server dependencies to the handlers. For that, we will wrap the `HandlerFunc` inside `Handler`, and move it to a different file. 
+Now we want to inject server dependencies to the handlers. For that, we will wrap the `HandlerFunc` inside `Handler`, and move it to a different file.
 
 ```golang
 //handlers.go
@@ -245,7 +256,7 @@ func (s *server) routes() {
 }
 ```
 
-Now we write a test for `handleQuotes`. This test mocks `QuoteGenerator` and test the service if the Quote was generated successfully and not.
+Now we will write a test for `handleQuotes`. This test mocks the `QuoteGenerator` and validates assertions about `handleQuotes()` function result in case `QuoteGenerator` returned a corrctect quote or when it returned an error.
 
 Define a mock for 'QuoteGenerator' using `github.com/stretchr/testify/mock`:
 
@@ -272,7 +283,7 @@ func (m *MockQuoteGenerator) Generate(lang string) (*quote.Quote, error) {
 // ...
 ```
 
-Then write test using this mock
+Then write the test using this mock:
 
 ```golang
 // handlers_test.go
@@ -314,7 +325,7 @@ func TestHandleQuotes(t *testing.T) {
 }
 ```
 
-We make this mock return zeroed struct of `Quote`. And we are able to assert if the method has been called with expected params. If we run the test we see.
+We make this mock return a zeroed struct of `Quote`. Here we also verify if the method has been called with expected parameters. When we run the test we will see:
 
 ```console
 > go test -v .
@@ -327,7 +338,7 @@ We make this mock return zeroed struct of `Quote`. And we are able to assert if 
                 at: [handlers_test.go:40]
 ```
 
-As expected the test failing because we don't call `QuoteGenerator.Generate` in our code. Let's fix it.
+As expected the test failed because we didn't call `QuoteGenerator.Generate` in our code. Let's fix it.
 
 ```golang
 // handlers.go
@@ -372,9 +383,9 @@ panic: runtime error: invalid memory address or nil pointer dereference [recover
 ...
 ```
 
-Now our test passes but our e2e test is failing because we didn't implement the actual `QuoteGenerator`. We deal with it in a minute, but first of all, let's test `quoteHandler` for negative flow.
+Now our test passes, but our E2E test is failing because we didn't implement the actual `QuoteGenerator`. We will deal with it in a minute, but first of all, let's test `quoteHandler` for negative flow.
 
-We add another test.
+We add another test:
 
 ```golang
 //handlers_test.go
@@ -399,7 +410,7 @@ func TestHandleQuotes_QuoteGeneratorError(t *testing.T) {
 }
 ```
 
-This is passing too, but seem that we have code duplication that we want to prevent.
+This is passing too, but seems that we have code duplication that we want to avoid.
 
 ```console
 > go test -v .
@@ -489,7 +500,7 @@ Let's run the tests again:
 panic: runtime error: invalid memory address or nil pointer dereference [recovered]
 ```
 
-Now let's go back to our failing e2e test and implement the `QuoteGenereator`. We add the implementation to `quote.go` file
+Now let's go back to our failing E2E test and implement the `QuoteGenereator`. We add the implementation to the `quote.go` file:
 
 ```golang
 // quote/quote.go
@@ -513,9 +524,9 @@ func (f *Forismatic) Generate(lang string) (*Quote, error) {
 }
 ```
 
-I prefer to call it the same as the name of the service it uses. The 'Forismatic' struct holds the `HTTPWrapper` interface of `http.Client` so we will be able to mock it in tests.
+I prefer to call the actual implementation the same name as the service it uses. The 'Forismatic' struct holds the `HTTPWrapper` interface of `http.Client` so we will be able to mock it in tests.
 
-Now we inject the actual implementation to our `server`.
+Now we inject the actual implementation to our `server`:
 
 ```golang
 // main.go
@@ -566,7 +577,7 @@ func TestQuoteAPI(t *testing.T) {
 // ...
 ```
 
-Now let's run the tests
+Now let's run the tests:
 
 ```concole
 > go test -v .
@@ -590,7 +601,7 @@ Now let's run the tests
 FAIL
 ```
 
-We still see the test fail. But it is not `panic: runtime error: invalid memory address` anymore. Our service returns 500 because `Forismatic.Generate` returns not implemented error. Let's implement this method, starting with the test.
+We still see the test fails. But it is not `panic: runtime error: invalid memory address` anymore. Our service returns 500 because `Forismatic.Generate` returns `not implemented error`. Let's implement this method, starting with the test.
 
 ```golang
 // quote/quote_test.go
@@ -665,7 +676,9 @@ func TestForismatic_Generate(t *testing.T) {
 }
 ```
 
-We already know how to use `testCases` table so I used it from the start. The new thing here is that this logic depends on `http.Client`. Good news that we don't need to mock it using `testify/mock`. Instead, we use `httptest.Server`. This mock server gives us the ability to assert on the external requests and mock the responses. We run the test and see...
+We already know how to use `testCases` table so I used it from the start. The new thing here is that this logic depends on `http.Client`. Good news that we don't need to mock it using `testify/mock`. Instead, we use `httptest.Server`. This mock server gives us the ability to assert on the external requests and mock the responses.
+
+We run the test and see:
 
 ```console
 > go test -v ./...
@@ -701,7 +714,7 @@ We already know how to use `testCases` table so I used it from the start. The ne
 FAIL
 ```
 
-Failed as expected, let's implement the `Generate` function
+Failed as expected, let's implement the `Generate` function:
 
 ```golang
 // quote/quote.go
@@ -742,7 +755,7 @@ func (f *Forismatic) Generate(lang string) (*Quote, error) {
 }
 ```
 
-We run the tests and see...
+We run the tests and see:
 
 ```console
 go test -v ./...
@@ -764,7 +777,7 @@ PASS
 PASS
 ```
 
-Let's add test for the negative flow
+Let's add a test for the negative flow:
 
 ```golang
 // quote/quote_test.go
@@ -785,7 +798,7 @@ Let's add test for the negative flow
 // ...
 ```
 
-All tests are passes, but there one small thing left to fix. Now our e2e service uses the actual `http.Client` to call to `forismatic` service. This is problematic because we are not in control of how many times our test going to run (in benchmarks for example). This may create unnecessary load on external service. The good news is that we already know how to do it. Let's use `httptest.Server` again.
+All tests have passed, but there is one small thing left to fix. Now our E2E service uses the actual `http.Client` to call `forismatic` service. This is problematic because we are not in control of how many times our test is going to run (in benchmarks for example). This may create unnecessary load on external service. The good news is that we already know how to solve this. Let's use `httptest.Server` again.
 
 ```golang
 // main_test.go
@@ -865,7 +878,7 @@ func TestQuoteAPI(t *testing.T) {
 // ...
 ```
 
-Now if we run the tests again, the will pass as before, but now there is no call to the external service. Another thing that is worth mentioning is that we used `map[string]interface{}` as the service response instead of the real struct (`quote.Quote`). I prefer this way because it is may indicate when we break interface with our users. In such case, the test will fail.
+Now if we run the tests again, they will pass as before, but now there is no call to the external service. Another thing worth mentioning is that we used `map[string]interface{}` as the service response instead of the real struct (`quote.Quote`). I prefer this way of implementation because it may alert if we accidentally brake the interface with our service's users. In such case, the test will fail.
 
 
 ## Step 3 - Working with DB
@@ -877,7 +890,7 @@ I assume that you already have Postgres DB installed on your machine (if not ple
 > createdb quotes_test
 ```
 
-Now we add some migrations files to create the recipient table.
+Now we add some migrations files to create a recipient table.
 
 ```
 > migrate create -ext sql -dir migrations  create_recipient_table
@@ -894,14 +907,15 @@ CREATE TABLE recipients
 );
 ```
 
-Run the migration
+Run the migration:
 
 ```console
 > migrate -source file:migrations -database postgres://localhost:5432/quotes?sslmode=disable up
 > migrate -source file:migrations -database postgres://localhost:5432/quotes_test?sslmode=disable up
 ```
 
-Now we add the recipient model
+Now we add the recipient model:
+
 ```golang
 // recipient/recipient.go
 package recipient
@@ -942,7 +956,7 @@ func (p *Persistence) AllRecipients() ([]Recipient, error) {
 }
 ```
 
-Now write a test
+Now write a test for `AllRecipients()` method.
 
 ```golang
 // recipient/recipient_test.go
@@ -1039,10 +1053,10 @@ func clearDB(db *sql.DB) error {
 ```
 
 This test file needs a bit of explanation.
-1. I use `quotes_test` DB for tests. In order to be able to freely truncate all the tables before each test and run clean.
-2. The use of `*testing.M`: TestMain gives us more control over how the tests of this package are running.  Here we use it to run a setup. It runs once before all of the tests in this package.
-2. We test `recipient.Persistence` without mocking its dependency (DB). Unfortunately, we don't use an ORM here, and even if we did, it is difficult not to use custom SQL scripts that are passed as a string to different DB methods. This SQL script is not compiled, means that errors are available only in run time. Our tests provide such a runtime.
-3. Use `require` package after a cleanup and setup. `require` (in contrast to `assert`) package stops the test run if the condition wasn't met. Here it makes sense, if I wasn't able to set up or clean last run data, there is no point to run the following tests.
+1. I use `quotes_test` DB for tests. In order to be able to freely truncate all the tables before each test and run it clean.
+2. The use of `*testing.M`: TestMain gives us more control over how the tests of this package are running.  Here we use it to run a setup. It runs once before all of the tests in this package. This is useful for creating connection to DB. Creating it once for all tests will increase tests performance.
+2. We test `recipient.Persistence` without mocking its dependency (DB). Unfortunately, we don't use an ORM here, and even if we did, it is difficult not to use custom SQL scripts that are passed as a string to different DB methods. This SQL script is not compiled, meaning that syntax errors can be found only in runtime. Fortunately, our tests provide such a runtime.
+3. I am using `require` package after a cleanup and setup. In contrast to `assert`, `require` package stops the test run if the condition wasn't met. Now this makes sense, if I wasn't able to set up or clean last run data, there is no point to run the following tests.
 
 Let's run the tests:
 ```console
@@ -1091,7 +1105,7 @@ func (p *Persistence) AllRecipients() ([]Recipient, error) {
 // ...
 ```
 
-We run the tests and see
+We run the tests and see:
 
 ```console
 > go test -v ./...
@@ -1104,7 +1118,7 @@ PASS
 ...
 ```
 
-Now we add a negative test
+Now let's add a negative test:
 
 ```golang
 // recipient/recipient_test.go
@@ -1128,7 +1142,7 @@ func TestAllRecipients(t *testing.T) {
 // ...
 ```
 
-We run the tests again ...
+We run the tests again:
 
 ```console
 > go test -v ./...
@@ -1141,7 +1155,7 @@ We run the tests again ...
 PASS
 ```
 
-Now let's app e2e test for that. I want to add the recipients' list to the `/quotes` API response. We expand the API response as follows.
+Now let's add E2E test for that. I want to add the recipients' list to the `/quotes` API response. We expand the API response as follows.
 
 ```golang
 // handlers.go
@@ -1171,7 +1185,7 @@ func (s *server) handleQuotes() http.HandlerFunc {
 
 ```
 
-We run the tests and see that the e2e test failed
+We run the tests and see that the E2E test failed
 
 ```console
 > go test -v ./...
@@ -1192,7 +1206,7 @@ We run the tests and see that the e2e test failed
 FAIL
 ```
 
-We fix the test and assertion for the recipients' collection
+We fix the test for the recipients' collection
 
 ```golang
 // main_test.go
@@ -1334,7 +1348,11 @@ func clearDB(db *sql.DB) error {
 }
 ```
 
-Now the e2e test is pre-setting the DB, asserting the request to have recipients slice, but still fails because we didn't implement recipients fetch inside the handler. Let's do it, and fix handler_test as we go.
+Now the E2E test do the following:
+ 1. Pre-setting the DB
+ 2. Validating the request to have recipients array.
+
+But the test has failed because we didn't implement recipients fetch inside the handler. Let's do it, and fix handler_test as we go.
 
 ```golang
 // handlers.go
